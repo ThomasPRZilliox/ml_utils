@@ -11,6 +11,9 @@ def random_crop_resize(image, cropped_factor=0.95):
     Returns:
         The cropped and resized image.
     """
+    if cropped_factor <= 0 or cropped_factor > 1.0:
+        raise ValueError("cropped_factor must be between 0 (exclusive) and 1.0 (inclusive)")
+
     shape = tf.shape(image)          # dynamic shape — works inside tf.data/tf.function
     h, w = shape[0], shape[1]
 
