@@ -1,27 +1,27 @@
 import tensorflow as tf
 
-def random_crop_resize(image, cropped_factor=0.95):
+def random_crop_resize(image, cropped_factor=0.95, seed=None):
     """
     Randomly crops an image and resizes it back to its original dimensions.
-    
+
     Args:
         image: A 3D tensor representing an image (H, W, C).
         cropped_factor: The factor by which to crop the image (default: 0.95).
-        
+        seed: Optional integer seed for reproducibility (default: None).
+
     Returns:
         The cropped and resized image.
     """
     if cropped_factor <= 0 or cropped_factor > 1.0:
         raise ValueError("cropped_factor must be between 0 (exclusive) and 1.0 (inclusive)")
 
-    shape = tf.shape(image)          # dynamic shape — works inside tf.data/tf.function
+    shape = tf.shape(image)
     h, w = shape[0], shape[1]
 
     crop_h = tf.cast(tf.cast(h, tf.float32) * cropped_factor, tf.int32)
     crop_w = tf.cast(tf.cast(w, tf.float32) * cropped_factor, tf.int32)
 
-    image = tf.image.random_crop(image, size=(crop_h, crop_w, 3))
+    image = tf.image.random_crop(image, size=(crop_h, crop_w, 3), seed=seed)
 
-    # resize back to original dimensions (also dynamic)
     image = tf.image.resize(image, size=(h, w))
     return image
