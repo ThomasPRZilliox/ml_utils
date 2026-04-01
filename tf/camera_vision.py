@@ -1,4 +1,6 @@
 import tensorflow as tf
+import math
+import tensorflow as tf
 
 def random_crop_resize(image, cropped_factor=0.95, seed=None):
     """
@@ -102,3 +104,81 @@ def random_erasing(image, prob=0.5, min_area=0.02, max_area=0.3,
         true_fn=lambda: erase(image),
         false_fn=lambda: image
     )
+
+
+
+def _rotate_with_transform(image, angle):
+    """Applies a rotation using TF's projective transform."""
+    shape = tf.shape(image)
+    h = tf.cast(shape[0], tf.float32)
+    w = tf.cast(shape[1], tf.float32)
+
+    cx, cy = w / 2.0, h / 2.0
+    cos_a = tf.math.cos(angle)
+    sin_a = tf.math.sin(angle)
+
+    # Projective transform matrix (8 coefficients, row-major)
+    # Maps output pixel (x', y') back to input pixel (x, y)
+    transform = [
+        cos_a,  sin_a, cx - cx * cos_a - cy * sin_a,
+       -sin_a,  cos_a, cy + cx * sin_a - cy * cos_a,
+        0.0,    0.0
+    ]
+    transform = tf.reshape(tf.stack(transform), [1, 8])
+
+    img_4d    = tf.expand_dims(image, 0)                    # (1, H, W, C)
+    output_shape = tf.stack([h, w])
+
+    rotated = tf.raw_ops.ImageProjectiveTransformV3(
+        images=tf.cast(img_4d, tf.float32),
+        transforms=transform,
+        output_shape=tf.cast(output_shape, tf.int32),
+        interpolation="BILINEAR",
+        fill_mode="CONSTANT",
+        fill_value=0.0
+    )
+    return tf.squeeze(rotated, axis=0)                      # (H, W, C)
+
+
+def random_rotation(image, max_angle=30, mode="black", seed=None):
+    """
+    Randomly rotates an image and fills empty pixels with black, white, or noise.
+
+    Args:
+        image:     A 3D tensor (H, W, C) with pixel values in [0, 255].
+        max_angle: Maximum rotation angle in degrees (default: 30).
+        mode:      Fill for empty pixels — "black" (0), "white" (255),
+                   or "noise" (default: "black").
+        seed:      Optional integer seed for reproducibility (default: None).
+
+    Returns:
+        The rotated image with background filled according to mode.
+
+    Raises:
+        ValueError: If mode is not one of "black", "white", or "noise".
+    """
+    if mode not in ("black", "white", "noise"):
+        raise ValueError(f"mode must be 'black', 'white', or 'noise', got '{mode}'")
+
+    if seed is not None:
+        seeds = tf.random.experimental.stateless_split([seed, seed + 1], num=2)
+
+    def _uniform(i, *args, **kwargs):
+        if seed is not None:
+            return tf.random.stateless_uniform(*args, seed=seeds[i], **kwargs)
+        return tf.random.uniform(*args, **kwargs)
+
+    max_rad = max_angle * (math.pi / 180.0)
+    angle = _uniform(0, [], -max_rad, max_rad)
+
+    rotated = _rotate_with_transform(image, angle)
+
+    if mode == "black":
+        return rotated
+
+    # Rotate an all-ones canvas to find which pixels are empty
+    ones = tf.ones_like(image, dtype=tf.float32)
+    valid_mask = _rotate_with_transform(ones, angle)
+
+    if mode == "white":
+        fill = tf.ones_lik
