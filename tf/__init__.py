@@ -1,1 +1,1 @@
-from . import camera_vision
+from . import computer_vision
